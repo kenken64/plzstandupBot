@@ -166,7 +166,7 @@ This project is open source. Please check the repository for license details.
 
 ## Author
 
-Kenneth Wong (@kenken64)
+Kenneth Phang (@kenken64)
 
 ## Acknowledgments
 
