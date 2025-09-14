@@ -1,5 +1,7 @@
 # PlzStandUp Robot Firmware
 
+**📸 [View Robot Photos & Videos](https://photos.app.goo.gl/qP713SWyDZ1aFKTv6)**
+
 A self-balancing robot firmware project built with Arduino framework and PlatformIO for the Arduino UNO R4 Minima.
 
 ## Overview
