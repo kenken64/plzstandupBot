@@ -71,6 +71,10 @@ class RobotBluetoothController:
             return None
             
         try:
+            # Clear any existing data in buffer by reading it
+            while self.connection.in_waiting:
+                self.connection.read(self.connection.in_waiting)
+            
             # Send command
             self.connection.write((command + '\n').encode('utf-8'))
             print(f"→ Sent: {command}")
@@ -79,19 +83,39 @@ class RobotBluetoothController:
             responses = []
             start_time = time.time()
             
-            while time.time() - start_time < 3:  # 3 second timeout
+            while time.time() - start_time < 5:  # Increased timeout to 5 seconds
                 if self.connection.in_waiting:
                     response = self.connection.readline().decode('utf-8').strip()
                     if response:
                         responses.append(response)
                         print(f"← Received: {response}")
                         
-                        # Break if we get a complete status or simple response
-                        if response.startswith("RESPONSE:") or response.startswith("ERROR:") or response == "=== END STATUS ===":
+                        # For GET_PID, look for the specific response format
+                        if command == "GET_PID" and "PID_VALUES:" in response:
+                            # Continue reading a bit more in case there are more lines
+                            time.sleep(0.2)
+                            while self.connection.in_waiting:
+                                extra_response = self.connection.readline().decode('utf-8').strip()
+                                if extra_response:
+                                    responses.append(extra_response)
+                                    print(f"← Received: {extra_response}")
                             break
+                        
+                        # Break if we get a complete status or simple response
+                        elif response.startswith("RESPONSE:") or response.startswith("ERROR:") or response == "=== END STATUS ===":
+                            break
+                        
+                        # For STATUS command, continue until END STATUS
+                        elif command == "STATUS" and response == "=== END STATUS ===":
+                            break
+                            
                 time.sleep(0.1)
             
-            return '\n'.join(responses) if responses else None
+            if not responses:
+                print("⚠️ No response received from robot")
+                return None
+                
+            return '\n'.join(responses)
             
         except Exception as e:
             print(f"Error sending command: {e}")
@@ -124,16 +148,33 @@ class RobotBluetoothController:
     def get_pid(self):
         """Get current PID parameters"""
         response = self.send_command("GET_PID")
+        print(f"🔍 DEBUG: Full response received: {repr(response)}")
+        
         if response:
-            for line in response.split('\n'):
-                if line.startswith("RESPONSE: PID_VALUES:"):
-                    pid_values = line.replace("RESPONSE: PID_VALUES:", "").strip()
-                    try:
-                        kp, ki, kd = map(float, pid_values.split(','))
-                        return {'kp': kp, 'ki': ki, 'kd': kd}
-                    except ValueError:
-                        print(f"Error parsing PID values: {pid_values}")
-                        return None
+            lines = response.split('\n')
+            print(f"🔍 DEBUG: Response lines: {lines}")
+            
+            for line in lines:
+                print(f"🔍 DEBUG: Checking line: '{line}'")
+                
+                # Check for different possible response formats
+                if "PID_VALUES:" in line:
+                    print(f"🔍 DEBUG: Found PID_VALUES line: '{line}'")
+                    
+                    # Extract the PID values part after the colon
+                    if ":" in line:
+                        pid_part = line.split(":", 1)[1].strip()
+                        print(f"🔍 DEBUG: Extracted PID part: '{pid_part}'")
+                        
+                        try:
+                            kp, ki, kd = map(float, pid_part.split(','))
+                            print(f"✅ Successfully parsed PID: Kp={kp}, Ki={ki}, Kd={kd}")
+                            return {'kp': kp, 'ki': ki, 'kd': kd}
+                        except ValueError as e:
+                            print(f"❌ Error parsing PID values '{pid_part}': {e}")
+                            return None
+        
+        print("❌ No valid PID response found")
         return None
     
     def calibrate(self):
