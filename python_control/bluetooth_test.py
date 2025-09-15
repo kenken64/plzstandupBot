@@ -121,6 +121,21 @@ class RobotBluetoothController:
         """Set PID parameters"""
         return self.send_command(f"PID:{kp},{ki},{kd}")
     
+    def get_pid(self):
+        """Get current PID parameters"""
+        response = self.send_command("GET_PID")
+        if response:
+            for line in response.split('\n'):
+                if line.startswith("RESPONSE: PID_VALUES:"):
+                    pid_values = line.replace("RESPONSE: PID_VALUES:", "").strip()
+                    try:
+                        kp, ki, kd = map(float, pid_values.split(','))
+                        return {'kp': kp, 'ki': ki, 'kd': kd}
+                    except ValueError:
+                        print(f"Error parsing PID values: {pid_values}")
+                        return None
+        return None
+    
     def calibrate(self):
         """Recalibrate robot balance"""
         return self.send_command("CALIBRATE")
@@ -145,11 +160,12 @@ def main():
             print("4. Stop Motors")
             print("5. Set Speed")
             print("6. Set PID")
-            print("7. Calibrate")
-            print("8. Custom Command")
-            print("9. Exit")
+            print("7. Get PID")
+            print("8. Calibrate")
+            print("9. Custom Command")
+            print("10. Exit")
             
-            choice = input("\nEnter choice (1-9): ").strip()
+            choice = input("\nEnter choice (1-10): ").strip()
             
             if choice == '1':
                 robot.get_status()
@@ -175,11 +191,20 @@ def main():
                 except ValueError:
                     print("Invalid PID values")
             elif choice == '7':
-                robot.calibrate()
+                pid_values = robot.get_pid()
+                if pid_values:
+                    print(f"\nCurrent PID Values:")
+                    print(f"  Kp: {pid_values['kp']}")
+                    print(f"  Ki: {pid_values['ki']}")
+                    print(f"  Kd: {pid_values['kd']}")
+                else:
+                    print("Failed to retrieve PID values")
             elif choice == '8':
+                robot.calibrate()
+            elif choice == '9':
                 command = input("Enter custom command: ")
                 robot.send_command(command)
-            elif choice == '9':
+            elif choice == '10':
                 break
             else:
                 print("Invalid choice")

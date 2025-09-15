@@ -38,6 +38,7 @@ The firmware now includes:
 - `STOP` - Stop all motors
 - `SPEED:xxx` - Set speed (0-255)
 - `PID:kp,ki,kd` - Update PID parameters
+- `GET_PID` - Retrieve current PID parameters
 - `CALIBRATE` - Recalibrate balance setpoint
 
 ## Python Script Usage
@@ -71,11 +72,21 @@ pip install pyserial
    ```
    This creates `/dev/rfcomm0`
 
-### Running the Test Script
+### Available Python Scripts
+
+#### 1. Basic Bluetooth Test Script
 ```bash
 cd python_control
 ./bluetooth_test.py
 ```
+Interactive menu for testing all robot functions including the new GET_PID command.
+
+#### 2. Advanced PID Tuning Tool
+```bash
+cd python_control
+./pid_tuner.py
+```
+Dedicated tool for PID parameter tuning with comparison features and testing.
 
 ### Custom Python Integration
 ```python
@@ -152,9 +163,23 @@ robot.stop_motors()
 robot = RobotBluetoothController()
 robot.connect()
 
+# Get current PID values
+pid_values = robot.get_pid()
+print(f"Current: Kp={pid_values['kp']}, Ki={pid_values['ki']}, Kd={pid_values['kd']}")
+
 # Adjust PID parameters
 robot.set_pid(8.0, 0.05, 1.5)
-robot.get_status()  # Check new values
+
+# Verify the changes
+new_pid = robot.get_pid()
+print(f"Updated: Kp={new_pid['kp']}, Ki={new_pid['ki']}, Kd={new_pid['kd']}")
+```
+
+### Advanced PID Tuning Tool
+Use the dedicated PID tuner script:
+```bash
+cd python_control
+./pid_tuner.py
 ```
 
 ### Data Logging

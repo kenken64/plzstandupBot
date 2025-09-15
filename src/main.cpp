@@ -467,6 +467,21 @@ void processBluetoothCommand() {
             Serial.println(newKd);
         }
     }
+    else if (bluetoothCommand.equals("GET_PID")) {
+        bluetooth.print("RESPONSE: PID_VALUES:");
+        bluetooth.print(Kp);
+        bluetooth.print(",");
+        bluetooth.print(Ki);
+        bluetooth.print(",");
+        bluetooth.println(Kd);
+        
+        Serial.print("BT: Sent PID values - Kp:");
+        Serial.print(Kp);
+        Serial.print(", Ki:");
+        Serial.print(Ki);
+        Serial.print(", Kd:");
+        Serial.println(Kd);
+    }
     else if (bluetoothCommand.equals("CALIBRATE")) {
         isCalibrated = false;
         calibrationSum = 0;
