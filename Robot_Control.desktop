@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Robot Control
+Comment=Launch Balancing Robot Control GUI
+Exec=bash -c 'cd "/home/kenneth/Projects/plzstandup/firmware" && ./start_robot_control.sh gui'
+Icon=applications-games
+Path=/home/kenneth/Projects/plzstandup/firmware
+Terminal=true
+StartupNotify=false
+Categories=Application;Development;

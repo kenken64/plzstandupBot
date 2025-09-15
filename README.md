@@ -31,8 +31,18 @@ PlzStandUp is a two-wheeled self-balancing robot that uses an MPU6050 gyroscope/
 - **Buzzer** (pin 13) - Audio feedback
 - **LED** (pin 13) - Status indicator
 
+### 📡 **Bluetooth Module (NEW)**
+- **HC-05 Bluetooth Module** - For wireless control and telemetry
+- Bluetooth pins:
+  - HC-05 TX → Arduino A0 (BT_RX_PIN)
+  - HC-05 RX → Arduino A1 (BT_TX_PIN)  
+  - Upload disable → Arduino A2 (BT_DISABLE_PIN) - ground during uploads
+- **Baud Rate**: 9600 (standard HC-05 default)
+- **Range**: ~10 meters typical
+
 ## Features
 
+### 🤖 **Core Balancing System**
 - **Automatic Calibration**: Self-calibrates balance point on startup (20 readings)
 - **PID Control**: Tuned PID controller with anti-windup and rate limiting
 - **Fast Recovery**: Detects rapid tilt changes and applies recovery forces
@@ -40,6 +50,15 @@ PlzStandUp is a two-wheeled self-balancing robot that uses an MPU6050 gyroscope/
 - **Fall Detection**: Stops motors when tilt exceeds safe limits (±60°)
 - **Debug Output**: Comprehensive serial monitoring of sensor data and control outputs
 - **Motor Direction Reversing**: Easy configuration for different motor orientations
+
+### 📡 **NEW: Bluetooth Control System** 
+- **🎮 Remote Control**: Full robot control via Bluetooth from your PC/phone
+- **📊 Real-time Telemetry**: Live data streaming (pitch, error, PID output, commands)
+- **🔧 Live PID Tuning**: Adjust Kp, Ki, Kd gains without reflashing firmware
+- **🕹️ Steering & Speed**: Differential motor control for turning while balancing
+- **🛡️ Safety Features**: Auto-decay commands, emergency stop, fall detection
+- **⚙️ Upload Safety**: Ground A2 pin to disable Bluetooth during firmware uploads
+- **🖥️ Multiple Interfaces**: Advanced GUI, command-line, and connection testing tools
 
 ## Installation
 
@@ -74,16 +93,63 @@ PlzStandUp is a two-wheeled self-balancing robot that uses an MPU6050 gyroscope/
    pio device monitor
    ```
 
+## 📡 Bluetooth Control Setup
+
+### Hardware Wiring
+```
+HC-05 Module  →  Arduino
+VCC          →  5V or 3.3V (use jumper wire for easy disconnect)
+GND          →  GND  
+TX           →  A0 (Arduino pin)
+RX           →  A1 (Arduino pin)
+             →  A2 (optional: add jumper to GND for upload mode)
+```
+
+### Software Setup
+```bash
+# 1. Install Python dependencies
+cd python_control
+pip install -r requirements.txt
+
+# 2. Pair HC-05 in Ubuntu Bluetooth settings (PIN: 1234 or 0000)
+
+# 3. Launch control interface
+./start_robot_control.sh        # Full setup + GUI
+./start_gui.sh                  # Quick GUI launch
+./start_robot_control.sh cli    # Command-line interface
+./start_robot_control.sh test   # Test connection
+```
+
+### Upload Safety
+- **Normal operation**: Leave A2 pin floating (no connection)
+- **Firmware upload**: Connect A2 to GND with jumper wire, then upload
+- **Alternative**: Disconnect HC-05 VCC wire during uploads
+
 ## Configuration
 
 ### PID Tuning
-The PID controller can be tuned by modifying these parameters in `main.cpp`:
 
-```cpp
-double Kp = 7.0;    // Proportional gain (gentler response)
-double Ki = 0.03;   // Integral gain (reduced windup)  
-double Kd = 1.2;    // Derivative gain (smoother damping)
+#### 📡 **Live Bluetooth Tuning (NEW)**
+Tune PID gains in real-time without reflashing firmware:
+
+**Via GUI**: Use the PID tuning sliders for instant adjustment
+
+**Via CLI/Commands**: Send PID commands directly
 ```
+PID:12.0,0.015,2.5    # Set Kp=12.0, Ki=0.015, Kd=2.5
+STATUS                 # Check current gains
+```
+
+#### **Current Optimized Gains** (based on log analysis)
+```cpp
+// Updated gains in main.cpp - more responsive with better damping
+double Kp = 12.0;    // Increased from 7.0 - more responsive to errors
+double Ki = 0.015;   // Decreased from 0.03 - reduced integral windup  
+double Kd = 2.5;     // Increased from 1.2 - better damping and reaction
+```
+
+#### **Legacy Manual Tuning**
+For manual firmware modification, edit these parameters in `main.cpp`:
 
 ### Motor Settings
 - `motorSpeedFactor`: Adjust for motor differences (default: 1)
@@ -103,15 +169,50 @@ mpu.setZAccelOffset(1170);
 
 ## Usage
 
+### 🤖 **Basic Robot Operation**
 1. **Power on** the robot and place it upright
 2. **Calibration phase**: The robot will automatically calibrate for ~20 readings
 3. **Balancing mode**: Robot will attempt to maintain balance using PID control
 4. **Monitor**: Use serial monitor (115200 baud) to view real-time debug information
 
+### 📡 **Bluetooth Control (NEW)**
+
+#### **Quick Start**
+```bash
+./start_robot_control.sh          # Launch GUI control
+./start_robot_control.sh cli      # Launch command-line control
+```
+
+#### **GUI Control**
+- **Speed/Steering Sliders**: Real-time robot control
+- **PID Tuning Sliders**: Live gain adjustment (Kp, Ki, Kd)
+- **Telemetry Display**: Live pitch, error, rates, commands
+- **Data Logging**: Save session data to CSV/JSON
+- **Emergency Stop**: Spacebar or Stop button
+
+#### **Command-Line Control** 
+Interactive commands when connected:
+- `w/s` - Forward/backward speed
+- `a/d` - Left/right steering  
+- `x` - Emergency stop
+- `p` - Set PID gains interactively
+- `t` - Show current telemetry
+- `q` - Quit
+
+#### **Direct Bluetooth Commands**
+```
+SPEED:10              # Set forward speed to 10
+STEER:-5              # Steer left (negative = left)
+PID:12.0,0.015,2.5    # Set PID gains
+STOP                  # Emergency stop all movement
+STATUS                # Get current robot status
+HELP                  # Show available commands
+```
+
 ### Serial Output
 The robot outputs detailed telemetry:
 ```
-Pitch: 179.85 | Setpoint: 180.12 | Error: -0.27 | Output: -15.23 | MOTOR_CMD: BACKWARD 30
+Pitch: 179.85 | Setpoint: 180.12 | Error: -0.27 | Output: -15.23 | Bal: -15.2 | Steer: 0.0 | Spd: 5.0
 ```
 
 ## Latest Performance Analysis (monitor.log)
@@ -157,15 +258,14 @@ Pitch: 179.85 | Setpoint: 180.12 | Error: -0.27 | Output: -15.23 | MOTOR_CMD: BA
 
 Important: In contrast, the dedicated balancing session logs (for example logs/balancing_robot_20250915_003442.log) show excellent performance around a setpoint of ~180.22° with small steady-state error (typically ±0.20° to ±0.45°) and smooth, well-damped motor activity. This confirms the current control strategy and gains are capable of tight balance when calibration and conditions are nominal.
 
-Current PID settings (see src/main.cpp): Kp = 7.0, Ki = 0.03, Kd = 1.2 (gentler response)
+**Current PID settings** (see src/main.cpp): Kp = 12.0, Ki = 0.015, Kd = 2.5 (optimized for responsiveness)
 
-Recommendations based on current settings:
-- Keep the above gains for general operation; they produce smooth, stable balance in the dedicated logs.
-- If a future run shows a persistent ~4–5° offset like in this monitor.log:
-  - Recalibrate the IMU at startup and ensure the robot is held upright during the 20 reading calibration window
-  - Check battery voltage and mechanical friction/stiction
-  - Optionally raise Ki slightly (e.g., Ki = 0.08) to reduce steady-state error; keep Kp, Kd unchanged
-  - Verify setpoint auto-calibration is completing (you should see "Calibrated setpoint:" in the serial log)
+**Recommendations for tuning**:
+- Use Bluetooth live tuning for real-time optimization
+- If persistent offset occurs: recalibrate IMU during startup
+- Check battery voltage and mechanical friction
+- Use GUI sliders for incremental gain adjustment
+- Monitor telemetry data for feedback during tuning
 
 ### Performance Visualization Tool
 
@@ -199,6 +299,50 @@ grep -o "Error: [0-9.-]*" monitor.log | tail -n 1000 | sed 's/Error: //' | awk '
 grep -o "TiltRate: [0-9.-]*" monitor.log | head -n 1000 | sed 's/TiltRate: //' | awk '{s+=$1; q+=$1*$1} END{print s/NR, sqrt(q/NR-(s/NR)^2)}'
 grep -o "TiltRate: [0-9.-]*" monitor.log | tail -n 1000 | sed 's/TiltRate: //' | awk '{s+=$1; q+=$1*$1} END{print s/NR, sqrt(q/NR-(s/NR)^2)}'
 ```
+
+---
+
+## 📁 Project Structure
+
+```
+/firmware/
+├── src/
+│   └── main.cpp                     # 🤖 Enhanced firmware with Bluetooth control
+├── python_control/               # 📡 Bluetooth control suite
+│   ├── robot_gui.py                # 🎮 Advanced GUI with real-time visualization
+│   ├── robot_client.py             # 💻 Command-line interface
+│   ├── test_connection.py          # 🧪 Connection testing tool
+│   ├── requirements.txt            # Python dependencies
+│   └── README.md                   # Bluetooth system documentation
+├── logs/                         # 📋 Historical performance data
+│   ├── balancing_robot_*.log       # Session logs with telemetry
+│   └── motor_tilt_test_*.log       # Motor testing logs
+├── start_robot_control.sh        # 🚀 Full-featured launcher script
+├── start_gui.sh                  # ⚡ Quick GUI launcher
+├── Robot_Control.desktop         # 🖥️ Desktop shortcut
+├── QUICK_START.md               # 📋 Quick reference guide
+├── plot_monitor.py               # 📈 Performance visualization tool
+├── monitor.log                   # 📊 Latest session data
+├── monitor_plot.png              # 🖼️ Performance analysis chart
+├── platformio.ini                # ⚙️ PlatformIO configuration
+└── README.md                     # 📖 This comprehensive guide
+```
+
+### 🔑 **Key Files:**
+- **`src/main.cpp`** - Complete firmware with balancing + Bluetooth control
+- **`start_robot_control.sh`** - One-command launch with auto-setup
+- **`python_control/robot_gui.py`** - Advanced GUI for control and tuning
+- **`QUICK_START.md`** - Fast reference for common operations
+
+### 🎆 **Getting Started:**
+1. Wire HC-05 to Arduino (A0, A1, A2)
+2. Upload `src/main.cpp` firmware  
+3. Run `./start_robot_control.sh`
+4. Control your robot remotely! 🎉
+
+---
+
+**📞 Support**: Check `QUICK_START.md` for troubleshooting and `python_control/README.md` for detailed Bluetooth setup instructions.
 
 ## Project Structure
 
