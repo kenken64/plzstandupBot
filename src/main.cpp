@@ -5,6 +5,7 @@
 #include <PID_v1.h>
 #include "MPU6050_6Axis_MotionApps20.h"
 #include <Wire.h>
+#include <SoftwareSerial.h>
 // Motor and encoder pin definitions
 #define BUZZER 13
 #define LED 13
@@ -19,8 +20,21 @@
 #define SPD_INT_L 10
 #define SPD_PUL_L 9
 
+// Bluetooth module pins (HC-05)
+#define BT_RX_PIN A0  // Connect to HC-05 TX
+#define BT_TX_PIN A1  // Connect to HC-05 RX
+#define BT_DISABLE_PIN A2  // Ground this pin to disable Bluetooth (for uploads)
+
 // MPU6050 interrupt pin
 #define MPU_INT_PIN 2
+
+// Bluetooth module setup
+SoftwareSerial bluetooth(BT_RX_PIN, BT_TX_PIN);
+
+// Bluetooth command variables
+String bluetoothCommand = "";
+bool commandReceived = false;
+char bluetoothBuffer[32];
 
 // MPU6050 DMP Settings & Variables
 MPU6050 mpu;
@@ -69,6 +83,9 @@ void moveBackward(int power);
 void stopMotors();
 void setMotorSpeeds(int leftSpeed, int rightSpeed);
 void controlMotors(int baseSpeed);
+void processBluetoothCommand();
+void sendBluetoothStatus();
+void readBluetoothCommand();
 
 // Interrupt Function
 void dmpDataReady() { mpuInterrupt = true; }
@@ -76,6 +93,7 @@ void dmpDataReady() { mpuInterrupt = true; }
 void setup()
 {
     Serial.begin(115200);
+    bluetooth.begin(9600);  // Initialize Bluetooth communication
     Wire.begin();
     pinMode(BUZZER, OUTPUT);
     pinMode(LED, OUTPUT);
@@ -89,6 +107,7 @@ void setup()
     pinMode(SPD_PUL_R, INPUT);
     pinMode(SPD_INT_L, INPUT);
     pinMode(SPD_PUL_L, INPUT);
+    pinMode(BT_DISABLE_PIN, INPUT_PULLUP);  // Bluetooth disable pin
     digitalWrite(BUZZER, LOW);
     digitalWrite(LED, LOW);
     stopMotors();
@@ -112,6 +131,7 @@ void setup()
         pid.SetSampleTime(5); // slightly slower to reduce noise sensitivity
         pid.SetOutputLimits(-255, 255);
         Serial.println("DMP ready. Balancing mode engaged.");
+        bluetooth.println("Robot initialized and ready for commands");
     }
     else
     {
@@ -202,6 +222,13 @@ void stopMotors()
 
 void loop()
 {
+    // Check for Bluetooth commands
+    readBluetoothCommand();
+    if (commandReceived) {
+        processBluetoothCommand();
+        commandReceived = false;
+    }
+    
     if (!dmpReady)
         return;
 
@@ -363,6 +390,119 @@ void loop()
             // Robot has fallen, stop motors
             stopMotors();
             Serial.println("Robot fallen - stopping motors");
+            bluetooth.println("STATUS: Robot fallen - motors stopped");
         }
     }
+}
+
+// Bluetooth communication functions
+void readBluetoothCommand() {
+    if (bluetooth.available()) {
+        bluetoothCommand = bluetooth.readStringUntil('\n');
+        bluetoothCommand.trim();
+        if (bluetoothCommand.length() > 0) {
+            commandReceived = true;
+            Serial.print("BT Command received: ");
+            Serial.println(bluetoothCommand);
+        }
+    }
+}
+
+void processBluetoothCommand() {
+    bluetooth.print("ACK: ");
+    bluetooth.println(bluetoothCommand);
+    
+    if (bluetoothCommand.equals("STATUS")) {
+        sendBluetoothStatus();
+    }
+    else if (bluetoothCommand.equals("FORWARD")) {
+        moveForward(50);
+        bluetooth.println("RESPONSE: Moving forward");
+        Serial.println("BT: Moving forward");
+    }
+    else if (bluetoothCommand.equals("BACKWARD")) {
+        moveBackward(50);
+        bluetooth.println("RESPONSE: Moving backward");
+        Serial.println("BT: Moving backward");
+    }
+    else if (bluetoothCommand.equals("STOP")) {
+        stopMotors();
+        bluetooth.println("RESPONSE: Motors stopped");
+        Serial.println("BT: Motors stopped");
+    }
+    else if (bluetoothCommand.startsWith("SPEED:")) {
+        int speed = bluetoothCommand.substring(6).toInt();
+        speed = constrain(speed, 0, 255);
+        motorSpeedFactor = speed / 100.0;
+        bluetooth.print("RESPONSE: Speed set to ");
+        bluetooth.println(speed);
+        Serial.print("BT: Speed set to ");
+        Serial.println(speed);
+    }
+    else if (bluetoothCommand.startsWith("PID:")) {
+        // Format: PID:Kp,Ki,Kd (e.g., PID:7.0,0.03,1.2)
+        int firstComma = bluetoothCommand.indexOf(',');
+        int secondComma = bluetoothCommand.indexOf(',', firstComma + 1);
+        
+        if (firstComma != -1 && secondComma != -1) {
+            double newKp = bluetoothCommand.substring(4, firstComma).toDouble();
+            double newKi = bluetoothCommand.substring(firstComma + 1, secondComma).toDouble();
+            double newKd = bluetoothCommand.substring(secondComma + 1).toDouble();
+            
+            pid.SetTunings(newKp, newKi, newKd);
+            Kp = newKp; Ki = newKi; Kd = newKd;
+            
+            bluetooth.print("RESPONSE: PID updated - Kp:");
+            bluetooth.print(newKp);
+            bluetooth.print(", Ki:");
+            bluetooth.print(newKi);
+            bluetooth.print(", Kd:");
+            bluetooth.println(newKd);
+            
+            Serial.print("BT: PID updated - Kp:");
+            Serial.print(newKp);
+            Serial.print(", Ki:");
+            Serial.print(newKi);
+            Serial.print(", Kd:");
+            Serial.println(newKd);
+        }
+    }
+    else if (bluetoothCommand.equals("CALIBRATE")) {
+        isCalibrated = false;
+        calibrationSum = 0;
+        calibrationCount = 0;
+        bluetooth.println("RESPONSE: Recalibration started");
+        Serial.println("BT: Recalibration started");
+    }
+    else {
+        bluetooth.print("ERROR: Unknown command: ");
+        bluetooth.println(bluetoothCommand);
+        Serial.print("BT: Unknown command: ");
+        Serial.println(bluetoothCommand);
+    }
+}
+
+void sendBluetoothStatus() {
+    bluetooth.println("=== ROBOT STATUS ===");
+    bluetooth.print("Pitch: ");
+    bluetooth.println(input, 2);
+    bluetooth.print("Setpoint: ");
+    bluetooth.println(setpoint, 2);
+    bluetooth.print("Error: ");
+    bluetooth.println(input - setpoint, 2);
+    bluetooth.print("PID Output: ");
+    bluetooth.println(output, 2);
+    bluetooth.print("Motor Left: ");
+    bluetooth.println(motorLeftSpeed);
+    bluetooth.print("Motor Right: ");
+    bluetooth.println(motorRightSpeed);
+    bluetooth.print("Calibrated: ");
+    bluetooth.println(isCalibrated ? "YES" : "NO");
+    bluetooth.print("PID Values - Kp:");
+    bluetooth.print(Kp);
+    bluetooth.print(", Ki:");
+    bluetooth.print(Ki);
+    bluetooth.print(", Kd:");
+    bluetooth.println(Kd);
+    bluetooth.println("=== END STATUS ===");
 }
